@@ -5,9 +5,7 @@ import spark.Spark;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import br.ufmg.engsoft.reprova.database.QuestionsDAO;
-import br.ufmg.engsoft.reprova.routes.api.Questions;
-import br.ufmg.engsoft.reprova.mime.json.Json;
+import br.ufmg.engsoft.reprova.routes.controllers.QuestionController;
 
 
 /**
@@ -35,18 +33,10 @@ public class Setup {
    * Setup the service routes.
    * This sets up the routes under the routes directory,
    * and also static files on '/public'.
-   * @param json          the json formatter
    * @param questionsDAO  the DAO for Question
    * @throws IllegalArgumentException  if any parameter is null
    */
-  public static void routes(Json json, QuestionsDAO questionsDAO) {
-    if (json == null)
-      throw new IllegalArgumentException("json mustn't be null");
-
-    if (questionsDAO == null)
-      throw new IllegalArgumentException("questionsDAO mustn't be null");
-
-
+  public static void routes() {
     Spark.port(Setup.port);
 
     logger.info("Spark on port " + Setup.port);
@@ -55,7 +45,6 @@ public class Setup {
     Spark.staticFiles.location("/public");
 
     logger.info("Setting up questions route:");
-    var questions = new Questions(json, questionsDAO);
-    questions.setup();
+    new QuestionController().setup();
   }
 }
