@@ -4,29 +4,24 @@ import spark.Spark;
 import spark.Request;
 import spark.Response;
 
+import java.util.Collection;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import br.ufmg.engsoft.reprova.services.handlers.CreateQuestionHandler;
-import br.ufmg.engsoft.reprova.services.handlers.DeleteQuestionHandler;
-import br.ufmg.engsoft.reprova.services.handlers.GetQuestionByIdHandler;
-import br.ufmg.engsoft.reprova.services.handlers.GetQuestionsHandler;
-import br.ufmg.engsoft.reprova.services.handlers.UpdateQuestionHandler;
-import br.ufmg.engsoft.reprova.services.input.CreateQuestionInput;
-import br.ufmg.engsoft.reprova.services.input.DeleteQuestionInput;
-import br.ufmg.engsoft.reprova.services.input.GetQuestionByIdInput;
-import br.ufmg.engsoft.reprova.services.input.GetQuestionsInput;
-import br.ufmg.engsoft.reprova.services.input.UpdateQuestionInput;
-import br.ufmg.engsoft.reprova.services.interfaces.ICreateQuestionHandler;
-import br.ufmg.engsoft.reprova.services.interfaces.IDeleteQuestionHandler;
-import br.ufmg.engsoft.reprova.services.interfaces.IGetQuestionByIdHandler;
-import br.ufmg.engsoft.reprova.services.interfaces.IGetQuestionsHandler;
-import br.ufmg.engsoft.reprova.services.interfaces.IUpdateQuestionHandler;
-import br.ufmg.engsoft.reprova.services.output.CreateQuestionOutput;
-import br.ufmg.engsoft.reprova.services.output.DeleteQuestionOutput;
-import br.ufmg.engsoft.reprova.services.output.UpdateQuestionOutput;
+import com.google.inject.Guice;
+import com.google.inject.Injector;
+
 import br.ufmg.engsoft.reprova.mime.json.Json;
 
+import br.ufmg.engsoft.reprova.model.Question;
+
+import br.ufmg.engsoft.reprova.modules.RepositoriesModule;
+import br.ufmg.engsoft.reprova.modules.UseCasesModule;
+
+import br.ufmg.engsoft.reprova.services.interfaces.*;
+import br.ufmg.engsoft.reprova.services.requests.*;
+import br.ufmg.engsoft.reprova.services.responses.*;
 
 /**
  * Questions route.
@@ -54,8 +49,14 @@ public class QuestionController {
    */
   protected final Json json;
 
+  /**
+   * Dependency injector
+   */
+  protected final Injector injector;
+
   public QuestionController() {
     json = new Json();
+	  injector = Guice.createInjector(new UseCasesModule(), new RepositoriesModule());
   }
 
   /**
@@ -71,7 +72,6 @@ public class QuestionController {
     Spark.post("/api/questions", this::post);
     Spark.put("/api/questions", this::put);
     Spark.delete("/api/questions", this::delete);
-
     logger.info("Setup /api/questions.");
   }
 
@@ -111,15 +111,17 @@ public class QuestionController {
 
     logger.info("Fetching question " + id);
 
-		GetQuestionByIdInput input = new GetQuestionByIdInput(id);
-		IGetQuestionByIdHandler handler = new GetQuestionByIdHandler();
-		var output = handler.handle(input);
+	  GetQuestionByIdRequest input = new GetQuestionByIdRequest(id);
 
-    var question = output.getQuestion();
+	  IGetQuestionByIdUseCase useCase = injector.getInstance(IGetQuestionByIdUseCase.class);
+
+	  GetQuestionByIdResponse output = useCase.handle(input);
+
+    Question question = output.getQuestion();
 
     if (question == null) {
       logger.error("Invalid request!");
-      response.status(400);
+      response.status(404);
       return invalid;
     }
 
@@ -145,11 +147,13 @@ public class QuestionController {
 
     logger.info("Fetching questions.");
 
-		GetQuestionsInput input = new GetQuestionsInput(auth);
-		IGetQuestionsHandler handler = new GetQuestionsHandler();
-		var output = handler.handle(input);
+		GetQuestionsRequest input = new GetQuestionsRequest(auth);
 
-    var questions = output.getQuestions();
+    IGetQuestionsUseCase useCase = injector.getInstance(IGetQuestionsUseCase.class);
+
+	  GetQuestionsResponse output = useCase.handle(input);
+
+    Collection<Question> questions = output.getQuestions();
 
     logger.info("Done. Responding...");
 
@@ -183,20 +187,30 @@ public class QuestionController {
     if(System.getenv("MULTIPLE_CHOICE") == "false" 
       && System.getenv("OPEN") == "false"
     ) {
-      response.status(403);
+      response.status(400);
       return invalid;
     }
   
-		CreateQuestionInput input = new CreateQuestionInput(body);
-		ICreateQuestionHandler handler = new CreateQuestionHandler();
-		CreateQuestionOutput output;
+		CreateQuestionRequest input = new CreateQuestionRequest(body);
+
+		ICreateQuestionUseCase useCase = injector.getInstance(ICreateQuestionUseCase.class);
+
+		CreateQuestionResponse output;
+
     try {
-      output = handler.handle(input);
+
+      output = useCase.handle(input);
+
       logger.info("Parsed question");
+
       logger.info("Adding question.");
+
     } catch(Exception e) {
+
       logger.error("Invalid request payload!", e);
+
       response.status(400);
+
       return invalid;
     }
 
@@ -233,16 +247,26 @@ public class QuestionController {
       return unauthorized;
     }
 
-    UpdateQuestionInput input = new UpdateQuestionInput(id, body);
-		IUpdateQuestionHandler handler = new UpdateQuestionHandler();
-		UpdateQuestionOutput output;
+    UpdateQuestionRequest input = new UpdateQuestionRequest(id, body);
+
+		IUpdateQuestionUseCase useCase = injector.getInstance(IUpdateQuestionUseCase.class);
+
+		UpdateQuestionResponse output;
+
     try {
-      output = handler.handle(input);
+
+      output = useCase.handle(input);
+
       logger.info("Parsed question");
+
       logger.info("Adding question.");
+
     } catch(Exception e) {
+
       logger.error("Invalid request payload!", e);
+
       response.status(400);
+
       return invalid;
     }
 
@@ -284,10 +308,11 @@ public class QuestionController {
 
     logger.info("Deleting question " + id);
 
-		DeleteQuestionInput input = new DeleteQuestionInput(id);
-		IDeleteQuestionHandler handler = new DeleteQuestionHandler();
-		DeleteQuestionOutput output = handler.handle(input);
+		DeleteQuestionRequest input = new DeleteQuestionRequest(id);
 
+		IDeleteQuestionUseCase useCase = injector.getInstance(IDeleteQuestionUseCase.class);
+
+		DeleteQuestionResponse output = useCase.handle(input);
 
     logger.info("Done. Responding...");
 
